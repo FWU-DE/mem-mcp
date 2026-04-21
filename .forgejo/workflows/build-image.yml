@@ -23,8 +23,11 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: git.edufeed.org
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: laoc
+          # The built-in GITHUB_TOKEN in Forgejo Actions lacks `write:package`.
+          # Create a PAT under Forgejo user settings with `write:package` scope
+          # and store it as a repo secret named REGISTRY_TOKEN.
+          password: ${{ secrets.REGISTRY_TOKEN }}
 
       - name: Extract image metadata
         id: meta
