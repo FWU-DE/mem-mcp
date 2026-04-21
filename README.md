@@ -185,19 +185,33 @@ npx @modelcontextprotocol/inspector --url http://localhost:3000/mcp --header "Au
 
 A `Dockerfile` and `docker-compose.yml` are included for self-hosted deployment. The container runs the server in HTTP mode behind your own reverse proxy (TLS is expected to be terminated upstream).
 
+Container images are built by Forgejo Actions on every push to `main` and every `vX.Y.Z` tag, then published to the Forgejo registry at `git.edufeed.org/laoc/mem-mcp`. Available tags: `:latest`, `:main`, `:sha-<short>`, `:vX.Y.Z`.
+
 ```bash
-# Copy and edit your environment.
+# One-time on the deploy host: authenticate to the Forgejo registry.
+# Skip this step if the package is set to public in Forgejo.
+docker login git.edufeed.org
+
+# First-time setup: configure environment.
 cp .env.example .env
 # Set API_KEY to a random secret for production.
 
-# Build and start.
-docker compose up -d --build
+# Deploy / update.
+docker compose pull
+docker compose up -d
 
 # Logs
 docker compose logs -f
 ```
 
 By default the container binds to `127.0.0.1:3000` on the host, so it's only reachable via a reverse proxy on the same machine. Adjust the `ports:` entry in `docker-compose.yml` if you need LAN exposure.
+
+### Building locally (development only)
+
+```bash
+docker build -t mem-ontology-mcp:dev .
+docker run --rm -p 127.0.0.1:3000:3000 --env-file .env mem-ontology-mcp:dev
+```
 
 ### Reverse proxy example (Caddy)
 

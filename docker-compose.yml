@@ -1,7 +1,7 @@
 services:
   mem-ontology-mcp:
-    build: .
-    image: mem-ontology-mcp:latest
+    image: git.edufeed.org/laoc/mem-mcp:latest
+    pull_policy: always
     container_name: mem-ontology-mcp
     restart: unless-stopped
     # Bind to loopback only — expected to sit behind a reverse proxy on the same host.
