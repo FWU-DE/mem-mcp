@@ -22,7 +22,7 @@
     "sparql"
   ],
   "author": "",
-  "license": "ISC",
+  "license": "Unlicense",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.20.2",
     "cors": "^2.8.5",
