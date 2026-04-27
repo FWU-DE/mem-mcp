@@ -206,6 +206,16 @@ docker compose logs -f
 
 By default the container binds to `127.0.0.1:3000` on the host, so it's only reachable via a reverse proxy on the same machine. Adjust the `ports:` entry in `docker-compose.yml` if you need LAN exposure.
 
+### Production checklist
+
+Before exposing the service publicly:
+
+- **Pick a hostname.** Replace `mcp.example.org` in the reverse-proxy snippets below with your real FQDN and create the DNS record.
+- **Set `API_KEY`.** When unset, the server is open access — fine for stdio or LAN, not for the public internet. Generate one with `openssl rand -hex 32` and put it in `.env`. Clients then send `Authorization: Bearer <key>`.
+- **Pin the image tag.** `:latest` makes updates implicit. For deliberate rollouts, change `image:` in `docker-compose.yml` to a release tag (`:vX.Y.Z`) or commit pin (`:sha-<short>`) and bump it on purpose.
+- **Confirm registry access.** `git.edufeed.org/laoc/mem-mcp` may be private. If `docker compose pull` fails with `unauthorized`, run `docker login git.edufeed.org` once on the host (or set the package to public in Forgejo).
+- **Allow egress to the SPARQL endpoint.** The container must reach `https://sparql.mem.edufeed.org/sparql/` (or whatever `SPARQL_ENDPOINT` points at). If outbound traffic is firewalled, allow-list that host.
+
 ### Building locally (development only)
 
 ```bash
