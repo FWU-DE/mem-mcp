@@ -11,6 +11,7 @@
     "build": "tsc",
     "prepare": "npm run build",
     "start": "node build/index.js",
+    "start:http": "node build/index.js --http",
     "dev": "tsc --watch"
   },
   "keywords": [
@@ -24,9 +25,13 @@
   "license": "ISC",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.20.2",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.2",
     "@types/node": "^24.9.2",
     "typescript": "^5.9.3"
   }

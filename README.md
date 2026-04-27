@@ -140,21 +140,89 @@ Arguments: { "query": "Fische", "bundesland": "SN" }
 
 ## Architecture
 
-- **Transport:** stdio (local MCP server)
+- **Transport:** stdio (default) or Streamable HTTP (`--http` flag)
 - **SDK:** `@modelcontextprotocol/sdk` with `McpServer` and `zod` schemas
 - **Data source:** SPARQL endpoint (configurable via `SPARQL_ENDPOINT` env var)
 - **Runtime:** Node.js, TypeScript, ES modules
 
 Source files:
 - `src/index.ts` — Main MCP server with all tool registrations
+- `src/http.ts` — Streamable HTTP transport (Express server)
 - `src/sparql.ts` — SPARQL query execution and result formatting
 
 ## Development
 
 ```bash
-npm run build    # Compile TypeScript
-npm start        # Run the server
+npm run build      # Compile TypeScript
+npm start          # Run the server (stdio)
+npm run start:http # Run the server (HTTP)
 ```
+
+## HTTP Mode
+
+Run with `--http` flag (or `npm run start:http`) to expose the MCP server as an HTTP service using Streamable HTTP transport.
+
+**Configuration** (via `.env` or environment variables):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `3000` | HTTP listen port |
+| `API_KEY` | *(unset)* | Bearer token for auth. If unset, auth is disabled. |
+
+**Authentication:** When `API_KEY` is set, all `/mcp` requests must include `Authorization: Bearer <key>`. Without `API_KEY`, the server is open access.
+
+**Client connection example:**
+
+```bash
+# Test with MCP Inspector
+npx @modelcontextprotocol/inspector --url http://localhost:3000/mcp
+
+# With authentication
+npx @modelcontextprotocol/inspector --url http://localhost:3000/mcp --header "Authorization: Bearer your-secret-key-here"
+```
+
+## Deployment (Docker)
+
+A `Dockerfile` and `docker-compose.yml` are included for self-hosted deployment. The container runs the server in HTTP mode behind your own reverse proxy (TLS is expected to be terminated upstream).
+
+```bash
+# Copy and edit your environment.
+cp .env.example .env
+# Set API_KEY to a random secret for production.
+
+# Build and start.
+docker compose up -d --build
+
+# Logs
+docker compose logs -f
+```
+
+By default the container binds to `127.0.0.1:3000` on the host, so it's only reachable via a reverse proxy on the same machine. Adjust the `ports:` entry in `docker-compose.yml` if you need LAN exposure.
+
+### Reverse proxy example (Caddy)
+
+```caddyfile
+mcp.example.org {
+    reverse_proxy 127.0.0.1:3000
+}
+```
+
+### Reverse proxy example (nginx)
+
+```nginx
+location /mcp {
+    proxy_pass http://127.0.0.1:3000/mcp;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    # Streamable HTTP uses SSE for server->client messages.
+    proxy_buffering off;
+    proxy_read_timeout 3600s;
+}
+```
+
+Clients then connect to `https://mcp.example.org/mcp` with `Authorization: Bearer <API_KEY>`.
 
 ## License
 

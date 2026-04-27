@@ -1,0 +1,15 @@
+services:
+  mem-ontology-mcp:
+    build: .
+    image: mem-ontology-mcp:latest
+    container_name: mem-ontology-mcp
+    restart: unless-stopped
+    # Bind to loopback only — expected to sit behind a reverse proxy on the same host.
+    # Change to "3000:3000" if you want it reachable directly on the LAN.
+    ports:
+      - "127.0.0.1:3000:3000"
+    env_file:
+      - .env
+    environment:
+      # .env values win; these are safe fallbacks.
+      PORT: 3000

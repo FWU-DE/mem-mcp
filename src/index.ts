@@ -169,53 +169,54 @@ function toolError(msg: string) {
   };
 }
 
-// --- MCP Server ---
+// --- MCP Server Factory ---
 
-const server = new McpServer({
-  name: "mem-ontology-server",
-  version: "0.0.1",
-});
+export function createServer(): McpServer {
+  const server = new McpServer({
+    name: "mem-ontology-server",
+    version: "0.0.1",
+  });
 
-// Tool 1: Execute arbitrary SPARQL queries
-server.registerTool(
-  "sparql_query",
-  {
-    title: "SPARQL Query",
-    description:
-      "Execute a SPARQL query against the MEM ontology triple store. " +
-      "PREFIX lp: <https://w3id.org/lehrplan/ontology/> is available. " +
-      "You MUST include FROM clauses for the graphs you need. " +
-      "Available graphs: " +
-      [
-        ...INFRA_GRAPHS.map((g) => `<${g}>`),
-        ...Object.entries(STATE_GRAPHS).map(([code, g]) => `${code}: <${g}>`),
-      ].join(", "),
-    inputSchema: {
-      query: z.string().describe("The full SPARQL SELECT query to execute"),
+  // Tool 1: Execute arbitrary SPARQL queries
+  server.registerTool(
+    "sparql_query",
+    {
+      title: "SPARQL Query",
+      description:
+        "Execute a SPARQL query against the MEM ontology triple store. " +
+        "PREFIX lp: <https://w3id.org/lehrplan/ontology/> is available. " +
+        "You MUST include FROM clauses for the graphs you need. " +
+        "Available graphs: " +
+        [
+          ...INFRA_GRAPHS.map((g) => `<${g}>`),
+          ...Object.entries(STATE_GRAPHS).map(([code, g]) => `${code}: <${g}>`),
+        ].join(", "),
+      inputSchema: {
+        query: z.string().describe("The full SPARQL SELECT query to execute"),
+      },
     },
-  },
-  async ({ query }) => {
-    try {
-      const results = await querySparql(query);
-      return { content: [{ type: "text", text: formatResults(results) }] };
-    } catch (e) {
-      return toolError(e instanceof Error ? e.message : String(e));
+    async ({ query }) => {
+      try {
+        const results = await querySparql(query);
+        return { content: [{ type: "text", text: formatResults(results) }] };
+      } catch (e) {
+        return toolError(e instanceof Error ? e.message : String(e));
+      }
     }
-  }
-);
+  );
 
-// Tool 2: List available Bundesländer
-server.registerTool(
-  "list_bundeslaender",
-  {
-    title: "List Bundesländer",
-    description:
-      "List all German federal states (Bundesländer) available in the ontology with their codes and URIs.",
-    inputSchema: {},
-  },
-  async () => {
-    try {
-      const query = `
+  // Tool 2: List available Bundesländer
+  server.registerTool(
+    "list_bundeslaender",
+    {
+      title: "List Bundesländer",
+      description:
+        "List all German federal states (Bundesländer) available in the ontology with their codes and URIs.",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const query = `
 PREFIX lp: <https://w3id.org/lehrplan/ontology/>
 SELECT DISTINCT ?uri ?label
 ${fromClauses(ALL_GRAPHS)}
@@ -226,35 +227,35 @@ WHERE {
 }
 ORDER BY ?label`;
 
-      const results = await querySparql(query);
-      return { content: [{ type: "text", text: formatResults(results) }] };
-    } catch (e) {
-      return toolError(e instanceof Error ? e.message : String(e));
+        const results = await querySparql(query);
+        return { content: [{ type: "text", text: formatResults(results) }] };
+      } catch (e) {
+        return toolError(e instanceof Error ? e.message : String(e));
+      }
     }
-  }
-);
+  );
 
-// Tool 3: List Schulfächer for a Bundesland
-server.registerTool(
-  "list_schulfaecher",
-  {
-    title: "List Schulfächer",
-    description:
-      "List all school subjects (Schulfächer) for a Bundesland. " +
-      "Accepts a state code (BY, SN, RP, ...) or name (Bayern, Sachsen, ...).",
-    inputSchema: {
-      bundesland: z
-        .string()
-        .describe(
-          "State code (BY, SN, RP, ...) or name (Bayern, Sachsen, Rheinland-Pfalz, ...)"
-        ),
+  // Tool 3: List Schulfächer for a Bundesland
+  server.registerTool(
+    "list_schulfaecher",
+    {
+      title: "List Schulfächer",
+      description:
+        "List all school subjects (Schulfächer) for a Bundesland. " +
+        "Accepts a state code (BY, SN, RP, ...) or name (Bayern, Sachsen, ...).",
+      inputSchema: {
+        bundesland: z
+          .string()
+          .describe(
+            "State code (BY, SN, RP, ...) or name (Bayern, Sachsen, Rheinland-Pfalz, ...)"
+          ),
+      },
     },
-  },
-  async ({ bundesland }) => {
-    try {
-      const bl = resolveBundesland(bundesland);
-      const graphs = graphsForBundesland(bl.code);
-      const query = `
+    async ({ bundesland }) => {
+      try {
+        const bl = resolveBundesland(bundesland);
+        const graphs = graphsForBundesland(bl.code);
+        const query = `
 PREFIX lp: <https://w3id.org/lehrplan/ontology/>
 SELECT DISTINCT ?uri (SAMPLE(?l) AS ?label)
 ${fromClauses(graphs)}
@@ -267,35 +268,35 @@ WHERE {
 GROUP BY ?uri
 ORDER BY ?label`;
 
-      const results = await querySparql(query);
-      return { content: [{ type: "text", text: formatResults(results) }] };
-    } catch (e) {
-      return toolError(e instanceof Error ? e.message : String(e));
+        const results = await querySparql(query);
+        return { content: [{ type: "text", text: formatResults(results) }] };
+      } catch (e) {
+        return toolError(e instanceof Error ? e.message : String(e));
+      }
     }
-  }
-);
+  );
 
-// Tool 4: List Schularten for a Bundesland
-server.registerTool(
-  "list_schularten",
-  {
-    title: "List Schularten",
-    description:
-      "List all school types (Schularten) for a Bundesland. " +
-      "Accepts a state code (BY, SN, RP, ...) or name (Bayern, Sachsen, ...).",
-    inputSchema: {
-      bundesland: z
-        .string()
-        .describe(
-          "State code (BY, SN, RP, ...) or name (Bayern, Sachsen, Rheinland-Pfalz, ...)"
-        ),
+  // Tool 4: List Schularten for a Bundesland
+  server.registerTool(
+    "list_schularten",
+    {
+      title: "List Schularten",
+      description:
+        "List all school types (Schularten) for a Bundesland. " +
+        "Accepts a state code (BY, SN, RP, ...) or name (Bayern, Sachsen, ...).",
+      inputSchema: {
+        bundesland: z
+          .string()
+          .describe(
+            "State code (BY, SN, RP, ...) or name (Bayern, Sachsen, Rheinland-Pfalz, ...)"
+          ),
+      },
     },
-  },
-  async ({ bundesland }) => {
-    try {
-      const bl = resolveBundesland(bundesland);
-      const graphs = graphsForBundesland(bl.code);
-      const query = `
+    async ({ bundesland }) => {
+      try {
+        const bl = resolveBundesland(bundesland);
+        const graphs = graphsForBundesland(bl.code);
+        const query = `
 PREFIX lp: <https://w3id.org/lehrplan/ontology/>
 SELECT DISTINCT ?uri (SAMPLE(?l) AS ?label)
 ${fromClauses(graphs)}
@@ -307,64 +308,64 @@ WHERE {
 GROUP BY ?uri
 ORDER BY ?label`;
 
-      const results = await querySparql(query);
-      return { content: [{ type: "text", text: formatResults(results) }] };
-    } catch (e) {
-      return toolError(e instanceof Error ? e.message : String(e));
+        const results = await querySparql(query);
+        return { content: [{ type: "text", text: formatResults(results) }] };
+      } catch (e) {
+        return toolError(e instanceof Error ? e.message : String(e));
+      }
     }
-  }
-);
+  );
 
-// Tool 5: Find Lehrpläne
-server.registerTool(
-  "find_lehrplaene",
-  {
-    title: "Find Lehrpläne",
-    description:
-      "Find curricula (Lehrpläne) by Bundesland, optionally filtered by Schulfach, Schulart, or Jahrgangsstufe. " +
-      "Use state codes/names. For Schulfach and Schulart, use the German name as shown by the list tools.",
-    inputSchema: {
-      bundesland: z
-        .string()
-        .describe("State code (BY, SN, RP, ...) or name (Bayern, Sachsen, ...)"),
-      schulfach: z
-        .string()
-        .optional()
-        .describe("Optional: subject name in German (e.g. Biologie, Mathematik)"),
-      schulart: z
-        .string()
-        .optional()
-        .describe("Optional: school type name (e.g. Gymnasium, Grundschule)"),
-      jahrgangsstufe: z
-        .number()
-        .int()
-        .min(1)
-        .max(13)
-        .optional()
-        .describe("Optional: grade level (1-13)"),
+  // Tool 5: Find Lehrpläne
+  server.registerTool(
+    "find_lehrplaene",
+    {
+      title: "Find Lehrpläne",
+      description:
+        "Find curricula (Lehrpläne) by Bundesland, optionally filtered by Schulfach, Schulart, or Jahrgangsstufe. " +
+        "Use state codes/names. For Schulfach and Schulart, use the German name as shown by the list tools.",
+      inputSchema: {
+        bundesland: z
+          .string()
+          .describe("State code (BY, SN, RP, ...) or name (Bayern, Sachsen, ...)"),
+        schulfach: z
+          .string()
+          .optional()
+          .describe("Optional: subject name in German (e.g. Biologie, Mathematik)"),
+        schulart: z
+          .string()
+          .optional()
+          .describe("Optional: school type name (e.g. Gymnasium, Grundschule)"),
+        jahrgangsstufe: z
+          .number()
+          .int()
+          .min(1)
+          .max(13)
+          .optional()
+          .describe("Optional: grade level (1-13)"),
+      },
     },
-  },
-  async ({ bundesland, schulfach, schulart, jahrgangsstufe }) => {
-    try {
-      const bl = resolveBundesland(bundesland);
-      const graphs = graphsForBundesland(bl.code);
+    async ({ bundesland, schulfach, schulart, jahrgangsstufe }) => {
+      try {
+        const bl = resolveBundesland(bundesland);
+        const graphs = graphsForBundesland(bl.code);
 
-      const filters = [`?s lp:LP_0000029 <${bl.uri}> .`];
+        const filters = [`?s lp:LP_0000029 <${bl.uri}> .`];
 
-      if (schulfach) {
-        const sfUri = await resolveSchulfachUri(schulfach, bl.uri, graphs);
-        filters.push(`?s lp:LP_0000537 <${sfUri}> .`);
-      }
-      if (schulart) {
-        const saUri = await resolveSchulartUri(schulart, bl.uri, graphs);
-        filters.push(`?s lp:LP_0000812 <${saUri}> .`);
-      }
-      if (jahrgangsstufe) {
-        const jsUri = `https://w3id.org/lehrplan/ontology/LP_${String(2000000 + jahrgangsstufe).padStart(7, "0")}`;
-        filters.push(`?s lp:LP_0000026 <${jsUri}> .`);
-      }
+        if (schulfach) {
+          const sfUri = await resolveSchulfachUri(schulfach, bl.uri, graphs);
+          filters.push(`?s lp:LP_0000537 <${sfUri}> .`);
+        }
+        if (schulart) {
+          const saUri = await resolveSchulartUri(schulart, bl.uri, graphs);
+          filters.push(`?s lp:LP_0000812 <${saUri}> .`);
+        }
+        if (jahrgangsstufe) {
+          const jsUri = `https://w3id.org/lehrplan/ontology/LP_${String(2000000 + jahrgangsstufe).padStart(7, "0")}`;
+          filters.push(`?s lp:LP_0000026 <${jsUri}> .`);
+        }
 
-      const query = `
+        const query = `
 PREFIX lp: <https://w3id.org/lehrplan/ontology/>
 SELECT DISTINCT ?s ?label
 ${fromClauses(graphs)}
@@ -377,61 +378,61 @@ WHERE {
 ORDER BY ?label
 LIMIT 50`;
 
-      const results = await querySparql(query);
-      return { content: [{ type: "text", text: formatResults(results) }] };
-    } catch (e) {
-      return toolError(e instanceof Error ? e.message : String(e));
-    }
-  }
-);
-
-// Tool 6: Get curriculum tree (hat Teil) — bounded by depth
-server.registerTool(
-  "get_lehrplan_tree",
-  {
-    title: "Get Lehrplan Tree",
-    description:
-      "Get the hierarchical structure (parent-child via 'hat Teil') of a specific Lehrplan. " +
-      "Use a Lehrplan URI obtained from find_lehrplaene. " +
-      "The depth parameter controls how many levels deep the tree goes (default 2). " +
-      "Use get_children to drill deeper into specific nodes.",
-    inputSchema: {
-      lehrplanUri: z.string().describe("URI of the Lehrplan (from find_lehrplaene results)"),
-      depth: z
-        .number()
-        .int()
-        .min(1)
-        .max(10)
-        .default(2)
-        .describe("How many levels deep to retrieve (default 2)"),
-    },
-  },
-  async ({ lehrplanUri, depth }) => {
-    try {
-      // Build UNION clauses for each depth level (1..depth)
-      // Level 1: root -> child
-      // Level 2: root -> intermediate -> child
-      // etc.
-      const unions: string[] = [];
-      for (let d = 1; d <= depth; d++) {
-        if (d === 1) {
-          unions.push(
-            `{ BIND(<${lehrplanUri}> AS ?parent) . ?parent lp:LP_0000008 ?child . }`
-          );
-        } else {
-          // Chain d-1 intermediate hops from root to ?parent, then ?parent -> ?child
-          const steps: string[] = [];
-          steps.push(`<${lehrplanUri}> lp:LP_0000008 ?step1 .`);
-          for (let i = 2; i < d; i++) {
-            steps.push(`?step${i - 1} lp:LP_0000008 ?step${i} .`);
-          }
-          steps.push(`BIND(?step${d - 1} AS ?parent)`);
-          steps.push(`?parent lp:LP_0000008 ?child .`);
-          unions.push(`{ ${steps.join(" ")} }`);
-        }
+        const results = await querySparql(query);
+        return { content: [{ type: "text", text: formatResults(results) }] };
+      } catch (e) {
+        return toolError(e instanceof Error ? e.message : String(e));
       }
+    }
+  );
 
-      const query = `
+  // Tool 6: Get curriculum tree (hat Teil) — bounded by depth
+  server.registerTool(
+    "get_lehrplan_tree",
+    {
+      title: "Get Lehrplan Tree",
+      description:
+        "Get the hierarchical structure (parent-child via 'hat Teil') of a specific Lehrplan. " +
+        "Use a Lehrplan URI obtained from find_lehrplaene. " +
+        "The depth parameter controls how many levels deep the tree goes (default 2). " +
+        "Use get_children to drill deeper into specific nodes.",
+      inputSchema: {
+        lehrplanUri: z.string().describe("URI of the Lehrplan (from find_lehrplaene results)"),
+        depth: z
+          .number()
+          .int()
+          .min(1)
+          .max(10)
+          .default(2)
+          .describe("How many levels deep to retrieve (default 2)"),
+      },
+    },
+    async ({ lehrplanUri, depth }) => {
+      try {
+        // Build UNION clauses for each depth level (1..depth)
+        // Level 1: root -> child
+        // Level 2: root -> intermediate -> child
+        // etc.
+        const unions: string[] = [];
+        for (let d = 1; d <= depth; d++) {
+          if (d === 1) {
+            unions.push(
+              `{ BIND(<${lehrplanUri}> AS ?parent) . ?parent lp:LP_0000008 ?child . }`
+            );
+          } else {
+            // Chain d-1 intermediate hops from root to ?parent, then ?parent -> ?child
+            const steps: string[] = [];
+            steps.push(`<${lehrplanUri}> lp:LP_0000008 ?step1 .`);
+            for (let i = 2; i < d; i++) {
+              steps.push(`?step${i - 1} lp:LP_0000008 ?step${i} .`);
+            }
+            steps.push(`BIND(?step${d - 1} AS ?parent)`);
+            steps.push(`?parent lp:LP_0000008 ?child .`);
+            unions.push(`{ ${steps.join(" ")} }`);
+          }
+        }
+
+        const query = `
 PREFIX lp: <https://w3id.org/lehrplan/ontology/>
 SELECT DISTINCT ?parent ?parentLabel ?child ?childLabel
 ${fromClauses(ALL_GRAPHS)}
@@ -442,47 +443,47 @@ WHERE {
 }
 ORDER BY ?parent ?child`;
 
-      const results = await querySparql(query);
+        const results = await querySparql(query);
 
-      // Check if any leaf nodes at the deepest level have further children
-      const leafUris = new Set<string>();
-      const parentUris = new Set<string>();
-      for (const binding of results.results.bindings) {
-        parentUris.add(binding.parent.value);
-        leafUris.add(binding.child.value);
+        // Check if any leaf nodes at the deepest level have further children
+        const leafUris = new Set<string>();
+        const parentUris = new Set<string>();
+        for (const binding of results.results.bindings) {
+          parentUris.add(binding.parent.value);
+          leafUris.add(binding.child.value);
+        }
+        // Leaves are children that never appear as parents
+        const leaves = [...leafUris].filter((u) => !parentUris.has(u));
+
+        let text = formatResults(results);
+        if (leaves.length > 0) {
+          text += `\n\n(Tree shown to depth ${depth}. Deeper levels may exist. Use get_children to explore further.)`;
+        }
+
+        return { content: [{ type: "text", text }] };
+      } catch (e) {
+        return toolError(e instanceof Error ? e.message : String(e));
       }
-      // Leaves are children that never appear as parents
-      const leaves = [...leafUris].filter((u) => !parentUris.has(u));
-
-      let text = formatResults(results);
-      if (leaves.length > 0) {
-        text += `\n\n(Tree shown to depth ${depth}. Deeper levels may exist. Use get_children to explore further.)`;
-      }
-
-      return { content: [{ type: "text", text }] };
-    } catch (e) {
-      return toolError(e instanceof Error ? e.message : String(e));
     }
-  }
-);
+  );
 
-// Tool 7: Get direct children of a node
-server.registerTool(
-  "get_children",
-  {
-    title: "Get Children",
-    description:
-      "Get the direct children of a specific node in the Lehrplan hierarchy (via 'hat Teil'). " +
-      "Use this to drill down into a specific branch after using get_lehrplan_tree.",
-    inputSchema: {
-      nodeUri: z
-        .string()
-        .describe("URI of the node to get children for"),
+  // Tool 7: Get direct children of a node
+  server.registerTool(
+    "get_children",
+    {
+      title: "Get Children",
+      description:
+        "Get the direct children of a specific node in the Lehrplan hierarchy (via 'hat Teil'). " +
+        "Use this to drill down into a specific branch after using get_lehrplan_tree.",
+      inputSchema: {
+        nodeUri: z
+          .string()
+          .describe("URI of the node to get children for"),
+      },
     },
-  },
-  async ({ nodeUri }) => {
-    try {
-      const query = `
+    async ({ nodeUri }) => {
+      try {
+        const query = `
 PREFIX lp: <https://w3id.org/lehrplan/ontology/>
 SELECT DISTINCT ?child ?childLabel
 ${fromClauses(ALL_GRAPHS)}
@@ -492,64 +493,64 @@ WHERE {
 }
 ORDER BY ?child`;
 
-      const results = await querySparql(query);
-      if (results.results.bindings.length === 0) {
-        return {
-          content: [{ type: "text", text: "No children found (leaf node)." }],
-        };
-      }
-      return { content: [{ type: "text", text: formatResults(results) }] };
-    } catch (e) {
-      return toolError(e instanceof Error ? e.message : String(e));
-    }
-  }
-);
-
-// Tool 8: Full-text search across Lehrpläne
-server.registerTool(
-  "search",
-  {
-    title: "Search Lehrpläne",
-    description:
-      "Full-text search across all Lehrplan nodes by keyword. " +
-      "Uses prefix matching (e.g. 'Fisch' also finds 'Fische'). " +
-      "Returns matching nodes with their parent Lehrplan for context. " +
-      "Optionally filter by Bundesland and/or Schulfach.",
-    inputSchema: {
-      query: z.string().describe("Search term (e.g. 'Fisch', 'Evolution')"),
-      bundesland: z
-        .string()
-        .optional()
-        .describe(
-          "Optional: state code (BY, SN, RP, ...) or name (Bayern, Sachsen, ...) to limit search"
-        ),
-      schulfach: z
-        .string()
-        .optional()
-        .describe(
-          "Optional: subject name in German (e.g. Biologie, Mathematik) to limit search to a specific subject"
-        ),
-    },
-  },
-  async ({ query, bundesland, schulfach }) => {
-    try {
-      let graphs: string[] = ALL_GRAPHS;
-      let blUri: string | undefined;
-      if (bundesland) {
-        const bl = resolveBundesland(bundesland);
-        graphs = graphsForBundesland(bl.code);
-        blUri = bl.uri;
-      }
-
-      const containsExpr = query.trim().split(/\s+/).map(w => `'${w.replace(/'/g, "")}*'`).join(" AND ");
-
-      let sparql: string;
-      if (schulfach) {
-        if (!blUri) {
-          return toolError("Bundesland is required when filtering by Schulfach.");
+        const results = await querySparql(query);
+        if (results.results.bindings.length === 0) {
+          return {
+            content: [{ type: "text", text: "No children found (leaf node)." }],
+          };
         }
-        const sfUri = await resolveSchulfachUri(schulfach, blUri, graphs);
-        sparql = `
+        return { content: [{ type: "text", text: formatResults(results) }] };
+      } catch (e) {
+        return toolError(e instanceof Error ? e.message : String(e));
+      }
+    }
+  );
+
+  // Tool 8: Full-text search across Lehrpläne
+  server.registerTool(
+    "search",
+    {
+      title: "Search Lehrpläne",
+      description:
+        "Full-text search across all Lehrplan nodes by keyword. " +
+        "Uses prefix matching (e.g. 'Fisch' also finds 'Fische'). " +
+        "Returns matching nodes with their parent Lehrplan for context. " +
+        "Optionally filter by Bundesland and/or Schulfach.",
+      inputSchema: {
+        query: z.string().describe("Search term (e.g. 'Fisch', 'Evolution')"),
+        bundesland: z
+          .string()
+          .optional()
+          .describe(
+            "Optional: state code (BY, SN, RP, ...) or name (Bayern, Sachsen, ...) to limit search"
+          ),
+        schulfach: z
+          .string()
+          .optional()
+          .describe(
+            "Optional: subject name in German (e.g. Biologie, Mathematik) to limit search to a specific subject"
+          ),
+      },
+    },
+    async ({ query, bundesland, schulfach }) => {
+      try {
+        let graphs: string[] = ALL_GRAPHS;
+        let blUri: string | undefined;
+        if (bundesland) {
+          const bl = resolveBundesland(bundesland);
+          graphs = graphsForBundesland(bl.code);
+          blUri = bl.uri;
+        }
+
+        const containsExpr = query.trim().split(/\s+/).map(w => `'${w.replace(/'/g, "")}*'`).join(" AND ");
+
+        let sparql: string;
+        if (schulfach) {
+          if (!blUri) {
+            return toolError("Bundesland is required when filtering by Schulfach.");
+          }
+          const sfUri = await resolveSchulfachUri(schulfach, blUri, graphs);
+          sparql = `
 PREFIX lp: <https://w3id.org/lehrplan/ontology/>
 SELECT DISTINCT ?s ?label ?lp ?lpLabel
 ${fromClauses(graphs)}
@@ -562,8 +563,8 @@ WHERE {
 }
 ORDER BY ?s
 LIMIT 50`;
-      } else {
-        sparql = `
+        } else {
+          sparql = `
 PREFIX lp: <https://w3id.org/lehrplan/ontology/>
 SELECT DISTINCT ?s ?label ?parent ?parentLabel
 ${fromClauses(graphs)}
@@ -577,38 +578,47 @@ WHERE {
 }
 ORDER BY ?s
 LIMIT 50`;
-      }
+        }
 
-      const results = await querySparql(sparql);
-      if (results.results.bindings.length === 0) {
-        return {
-          content: [
-            { type: "text", text: `No results found for "${query}".` },
-          ],
-        };
+        const results = await querySparql(sparql);
+        if (results.results.bindings.length === 0) {
+          return {
+            content: [
+              { type: "text", text: `No results found for "${query}".` },
+            ],
+          };
+        }
+        let text = formatResults(results);
+        if (results.results.bindings.length === 50) {
+          text += "\n\n(Results limited to 50. Try a more specific query or add filters.)";
+        }
+        return { content: [{ type: "text", text }] };
+      } catch (e) {
+        return toolError(e instanceof Error ? e.message : String(e));
       }
-      let text = formatResults(results);
-      if (results.results.bindings.length === 50) {
-        text += "\n\n(Results limited to 50. Try a more specific query or add filters.)";
-      }
-      return { content: [{ type: "text", text }] };
-    } catch (e) {
-      return toolError(e instanceof Error ? e.message : String(e));
     }
-  }
-);
+  );
+
+  return server;
+}
 
 // --- Start ---
 
 async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error("MEM Ontology MCP Server running on stdio");
-  console.error(`SPARQL endpoint: ${SPARQL_ENDPOINT}`);
-  console.error(`Infrastructure graphs: ${INFRA_GRAPHS.join(", ")}`);
-  console.error(
-    `State graphs: ${Object.entries(STATE_GRAPHS).map(([c, g]) => `${c}=${g}`).join(", ") || "(none)"}`
-  );
+  if (process.argv.includes("--http")) {
+    const { startHttpServer } = await import("./http.js");
+    startHttpServer(createServer);
+  } else {
+    const server = createServer();
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    console.error("MEM Ontology MCP Server running on stdio");
+    console.error(`SPARQL endpoint: ${SPARQL_ENDPOINT}`);
+    console.error(`Infrastructure graphs: ${INFRA_GRAPHS.join(", ")}`);
+    console.error(
+      `State graphs: ${Object.entries(STATE_GRAPHS).map(([c, g]) => `${c}=${g}`).join(", ") || "(none)"}`
+    );
+  }
 }
 
 main().catch((error) => {
