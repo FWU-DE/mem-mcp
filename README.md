@@ -13,7 +13,8 @@ The server provides the following tools:
 5. **`find_lehrplaene`** — Find curricula by state, optionally filtered by subject, school type, or grade level
 6. **`get_lehrplan_tree`** — Get the hierarchical structure of a Lehrplan (bounded by `depth`, default 2, max 10)
 7. **`get_children`** — Get direct children of a specific node (for drilling down into a branch)
-8. **`search`** — Full-text search across all Lehrplan nodes by keyword (uses Virtuoso `bif:contains`), with optional Bundesland filter
+8. **`get_kompetenzen`** — Flat catalogue of all descendant nodes (Kompetenzerwartungen, Lernbereiche, Inhalte, …) reachable from matching Lehrpläne, annotated with their class label. Takes the same filters as `find_lehrplaene`.
+9. **`search`** — Full-text search across all Lehrplan nodes by keyword (uses Virtuoso `bif:contains`), with optional Bundesland filter
 
 ## Installation
 
@@ -117,6 +118,12 @@ Tool: search
 Arguments: { "query": "Fische", "bundesland": "SN" }
 ```
 
+## Building a curriculum picker
+
+If you want to consume the same ontology from a web frontend — typically a Bundesland → Schulart → Schulfach → Lehrplan dropdown cascade with a topic-node tree — see [`docs/curriculum-picker.md`](docs/curriculum-picker.md). It documents the query templates, when you need a server proxy (CORS, mostly), and the gotchas (transitive `BFO_0000051` over-assertion, untagged labels, the optional Schulart filter).
+
+A runnable reference implementation lives in [`examples/curriculum-picker-demo/`](examples/curriculum-picker-demo/) — Node proxy plus vanilla-JS frontend, no build step. `node proxy.mjs`, then open `http://localhost:5174`.
+
 ## State Codes
 
 - **BW** — Baden-Württemberg
@@ -136,7 +143,7 @@ Arguments: { "query": "Fische", "bundesland": "SN" }
 - **SH** — Schleswig-Holstein
 - **TH** — Thüringen
 
-**Note:** Currently, curriculum data is available for **BY** (Bayern), **SN** (Sachsen), and **RP** (Rheinland-Pfalz).
+**Note:** Currently, curriculum data is available for **BY** (Bayern), **SN** (Sachsen), **RP** (Rheinland-Pfalz), **BB** (Brandenburg), and **BE** (Berlin).
 
 ## Architecture
 

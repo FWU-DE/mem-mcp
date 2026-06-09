@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <title>Curriculum Picker Demo</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --fg: #1a1a1a;
+        --muted: #6b7280;
+        --bg: #fdfdfc;
+        --border: #d1d5db;
+        --accent: #1d4ed8;
+        --selected: #dbeafe;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --fg: #f3f4f6;
+          --muted: #9ca3af;
+          --bg: #18181b;
+          --border: #3f3f46;
+          --accent: #60a5fa;
+          --selected: #1e3a8a;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        font: 15px/1.5 system-ui, -apple-system, sans-serif;
+        color: var(--fg);
+        background: var(--bg);
+        margin: 0;
+        padding: 24px;
+        max-width: 760px;
+      }
+      h1 { font-size: 1.5rem; margin: 0 0 4px; }
+      p.lede { color: var(--muted); margin: 0 0 24px; }
+      label { display: block; margin-bottom: 12px; }
+      .label-text { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 4px; }
+      select {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--bg);
+        color: var(--fg);
+        font: inherit;
+      }
+      select:disabled { opacity: 0.5; }
+      .tree, .picked {
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 8px 12px;
+        margin-top: 16px;
+      }
+      .section-title { font-size: 0.85rem; color: var(--muted); margin-bottom: 8px; }
+      ul.tree-list { list-style: none; padding: 0; margin: 0; }
+      ul.tree-list ul { list-style: none; padding-left: 22px; margin: 4px 0; }
+      .node { display: flex; gap: 6px; align-items: flex-start; padding: 3px 0; }
+      .chev {
+        width: 18px; height: 22px; flex: 0 0 18px;
+        background: transparent; border: 0; cursor: pointer;
+        color: var(--muted); font-family: monospace; padding: 0;
+      }
+      .chev:hover { color: var(--accent); }
+      .leaf-dot {
+        width: 18px; flex: 0 0 18px; color: var(--muted); text-align: center;
+      }
+      .node-label { flex: 1; min-width: 0; word-break: break-word; }
+      .actions { display: flex; gap: 4px; flex-shrink: 0; }
+      .actions button {
+        font: inherit; font-size: 0.75rem;
+        padding: 2px 6px; border: 1px solid var(--border);
+        background: var(--bg); color: var(--fg);
+        border-radius: 4px; cursor: pointer;
+      }
+      .actions button:hover { border-color: var(--accent); color: var(--accent); }
+      .actions button.on { background: var(--selected); border-color: var(--accent); color: var(--accent); }
+      .picked-section { margin-bottom: 8px; }
+      .picked-section:last-child { margin-bottom: 0; }
+      .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+      .chip {
+        display: inline-flex; gap: 6px; align-items: center;
+        background: var(--selected); color: var(--fg);
+        padding: 3px 8px; border-radius: 12px; font-size: 0.8rem;
+      }
+      .chip button {
+        background: transparent; border: 0; color: inherit;
+        cursor: pointer; font: inherit; padding: 0; line-height: 1;
+      }
+      .empty-hint { color: var(--muted); font-size: 0.8rem; font-style: italic; }
+      .loading { color: var(--muted); font-size: 0.85rem; padding: 4px 0; }
+      details { margin-top: 24px; }
+      summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
+      pre {
+        background: rgba(127, 127, 127, 0.1);
+        padding: 12px; border-radius: 6px;
+        font-size: 0.78rem; overflow-x: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Curriculum Picker Demo</h1>
+    <p class="lede">
+      Pick a Bundesland, Schulart, Schulfach, and Lehrplan. Then drill into the
+      topic tree and attach nodes to <code>teaches</code>, <code>assesses</code>,
+      or <code>competencyRequired</code> with <code>+T</code> / <code>+A</code> /
+      <code>+R</code>.
+    </p>
+
+    <label>
+      <span class="label-text">Bundesland</span>
+      <select id="bundesland"></select>
+    </label>
+
+    <label>
+      <span class="label-text">Schulart</span>
+      <select id="schulart" disabled></select>
+    </label>
+
+    <label>
+      <span class="label-text">Schulfach</span>
+      <select id="schulfach" disabled></select>
+    </label>
+
+    <label>
+      <span class="label-text">Lehrplan</span>
+      <select id="lehrplan" disabled></select>
+    </label>
+
+    <div id="tree-wrap" hidden>
+      <div class="tree">
+        <div class="section-title">Themen</div>
+        <ul class="tree-list" id="tree"></ul>
+      </div>
+    </div>
+
+    <div class="picked">
+      <div class="picked-section">
+        <div class="section-title">teaches</div>
+        <div class="chips" id="picked-teaches"><span class="empty-hint">noch nichts</span></div>
+      </div>
+      <div class="picked-section">
+        <div class="section-title">assesses</div>
+        <div class="chips" id="picked-assesses"><span class="empty-hint">noch nichts</span></div>
+      </div>
+      <div class="picked-section">
+        <div class="section-title">competencyRequired</div>
+        <div class="chips" id="picked-requires"><span class="empty-hint">noch nichts</span></div>
+      </div>
+    </div>
+
+    <details>
+      <summary>AMB output preview</summary>
+      <pre id="amb-output">{}</pre>
+    </details>
+
+    <script type="module">
+      // ── Opened via file://? Bail with a useful message ─────────────────
+      // The cascade fetches `/api/curricula`, which only resolves when the
+      // page is served by proxy.mjs. Opening index.html directly yields
+      // opaque CORS errors against `file:///api/curricula`.
+      if (location.protocol === 'file:') {
+        document.body.innerHTML = `
+          <h1>Run via the proxy, not file://</h1>
+          <p>This demo needs the bundled Node proxy because the public MEM
+          SPARQL endpoint doesn't send CORS headers — a page loaded from
+          <code>file://</code> can't reach it directly.</p>
+          <p>From <code>examples/curriculum-picker-demo/</code>:</p>
+          <pre>node proxy.mjs</pre>
+          <p>then open <a href="http://localhost:5174">http://localhost:5174</a>.</p>
+        `;
+        throw new Error('curriculum-picker-demo must be served via proxy.mjs, not opened via file://');
+      }
+
+      // ── State ──────────────────────────────────────────────────────────
+      const ANY_SCHULART = '__any__';
+      const REL = { teaches: 'picked-teaches', assesses: 'picked-assesses', competencyRequired: 'picked-requires' };
+
+      const state = {
+        bundeslandUri: '',
+        schulartUri: '',
+        schulfachUri: '',
+        lehrplanUri: '',
+        picked: { teaches: new Map(), assesses: new Map(), competencyRequired: new Map() }
+      };
+
+      // ── Proxy call ─────────────────────────────────────────────────────
+      // Single helper that posts {tool, args} to the proxy and returns items.
+      // The proxy validates nothing and just translates tool → SPARQL — fine
+      // for a demo, not fine for a real app with untrusted users.
+      async function callTool(tool, args = {}) {
+        const res = await fetch('/api/curricula', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ tool, args })
+        });
+        if (!res.ok) throw new Error(`${tool} failed: ${res.status}`);
+        const body = await res.json();
+        return body.items ?? [];
+      }
+
+      // ── Cascade ────────────────────────────────────────────────────────
+      // Each level: (1) reset all downstream state when the parent changes,
+      // (2) fetch the level's options, (3) populate the select.
+      const $bundesland = document.getElementById('bundesland');
+      const $schulart = document.getElementById('schulart');
+      const $schulfach = document.getElementById('schulfach');
+      const $lehrplan = document.getElementById('lehrplan');
+
+      function fillSelect(el, items, { firstOption = 'Bitte wählen…', extras = [] } = {}) {
+        el.innerHTML = '';
+        el.appendChild(new Option(firstOption, ''));
+        for (const e of extras) el.appendChild(new Option(e.label, e.value));
+        for (const item of items) el.appendChild(new Option(item.label, item.id));
+      }
+
+      function setLoading(el) {
+        el.innerHTML = '';
+        el.appendChild(new Option('Lädt…', ''));
+        el.disabled = true;
+      }
+
+      async function loadBundeslaender() {
+        setLoading($bundesland);
+        const items = await callTool('list_bundeslaender');
+        fillSelect($bundesland, items);
+        $bundesland.disabled = false;
+      }
+
+      async function loadSchularten() {
+        if (!state.bundeslandUri) return;
+        setLoading($schulart);
+        const items = await callTool('list_schularten', { bundeslandUri: state.bundeslandUri });
+        fillSelect($schulart, items, {
+          extras: [{ label: '(Alle Schularten)', value: ANY_SCHULART }]
+        });
+        $schulart.disabled = false;
+      }
+
+      async function loadSchulfaecher() {
+        if (!state.bundeslandUri || !state.schulartUri) return;
+        setLoading($schulfach);
+        const args = { bundeslandUri: state.bundeslandUri };
+        // ANY_SCHULART sentinel → omit schulartUri so the proxy drops the
+        // LP_0000812 filter; some states (RP, SN) don't tag every Lehrplan
+        // with a Schulart and would otherwise silently disappear.
+        if (state.schulartUri !== ANY_SCHULART) args.schulartUri = state.schulartUri;
+        const items = await callTool('list_schulfaecher', args);
+        fillSelect($schulfach, items);
+        $schulfach.disabled = false;
+      }
+
+      async function loadLehrplaene() {
+        if (!state.bundeslandUri || !state.schulartUri || !state.schulfachUri) return;
+        setLoading($lehrplan);
+        const args = { bundeslandUri: state.bundeslandUri, schulfachUri: state.schulfachUri };
+        if (state.schulartUri !== ANY_SCHULART) args.schulartUri = state.schulartUri;
+        const items = await callTool('find_lehrplaene', args);
+        fillSelect($lehrplan, items);
+        $lehrplan.disabled = false;
+      }
+
+      function resetFrom(level) {
+        // Cascading reset — when a parent changes, blank all downstream
+        // selects, hide the tree, and clear picked nodes (the user's
+        // picks lose meaning once the context moves).
+        if (level <= 1) { state.schulartUri = ''; fillSelect($schulart, [], { firstOption: '—' }); $schulart.disabled = true; }
+        if (level <= 2) { state.schulfachUri = ''; fillSelect($schulfach, [], { firstOption: '—' }); $schulfach.disabled = true; }
+        if (level <= 3) { state.lehrplanUri = ''; fillSelect($lehrplan, [], { firstOption: '—' }); $lehrplan.disabled = true; }
+        if (level <= 4) hideTree();
+      }
+
+      $bundesland.addEventListener('change', () => {
+        state.bundeslandUri = $bundesland.value;
+        resetFrom(1);
+        if (state.bundeslandUri) loadSchularten();
+      });
+      $schulart.addEventListener('change', () => {
+        state.schulartUri = $schulart.value;
+        resetFrom(2);
+        if (state.schulartUri) loadSchulfaecher();
+      });
+      $schulfach.addEventListener('change', () => {
+        state.schulfachUri = $schulfach.value;
+        resetFrom(3);
+        if (state.schulfachUri) loadLehrplaene();
+      });
+      $lehrplan.addEventListener('change', async () => {
+        state.lehrplanUri = $lehrplan.value;
+        resetFrom(4);
+        if (state.lehrplanUri) await showTree();
+      });
+
+      // ── Lazy tree ──────────────────────────────────────────────────────
+      // The Lehrplan's children are fetched up-front; deeper levels lazy-
+      // load on chevron click. The data over-asserts has-part transitively,
+      // so the proxy applies a FILTER NOT EXISTS that keeps only the
+      // truly-direct children at each level. See proxy.mjs.
+      const $tree = document.getElementById('tree');
+      const $treeWrap = document.getElementById('tree-wrap');
+      const cache = new Map(); // nodeUri → child items (or null while in flight)
+
+      function hideTree() {
+        $treeWrap.hidden = true;
+        $tree.innerHTML = '';
+        cache.clear();
+      }
+
+      async function showTree() {
+        $tree.innerHTML = '<li class="loading">Lädt…</li>';
+        $treeWrap.hidden = false;
+        const children = await callTool('get_node_children', { nodeUri: state.lehrplanUri });
+        cache.set(state.lehrplanUri, children);
+        $tree.innerHTML = '';
+        for (const child of children) $tree.appendChild(renderNode(child));
+      }
+
+      function renderNode(node) {
+        const li = document.createElement('li');
+        const row = document.createElement('div');
+        row.className = 'node';
+
+        // Expand / collapse chevron, or a leaf bullet when hasChildren=false.
+        const isLeaf = node.hasChildren === false;
+        if (isLeaf) {
+          const dot = document.createElement('span');
+          dot.className = 'leaf-dot';
+          dot.textContent = '•';
+          dot.setAttribute('aria-hidden', 'true');
+          row.appendChild(dot);
+        } else {
+          const chev = document.createElement('button');
+          chev.className = 'chev';
+          chev.type = 'button';
+          chev.textContent = '▸';
+          chev.setAttribute('aria-expanded', 'false');
+          chev.setAttribute('aria-label', 'Aufklappen: ' + node.label);
+          row.appendChild(chev);
+          let childrenContainer = null;
+          chev.addEventListener('click', async () => {
+            const open = chev.getAttribute('aria-expanded') === 'true';
+            if (open) {
+              chev.setAttribute('aria-expanded', 'false');
+              chev.textContent = '▸';
+              if (childrenContainer) childrenContainer.hidden = true;
+              return;
+            }
+            chev.setAttribute('aria-expanded', 'true');
+            chev.textContent = '▾';
+            if (childrenContainer) { childrenContainer.hidden = false; return; }
+            childrenContainer = document.createElement('ul');
+            childrenContainer.innerHTML = '<li class="loading">Lädt…</li>';
+            li.appendChild(childrenContainer);
+            const items = cache.get(node.id) ?? await callTool('get_node_children', { nodeUri: node.id });
+            cache.set(node.id, items);
+            childrenContainer.innerHTML = '';
+            for (const child of items) childrenContainer.appendChild(renderNode(child));
+          });
+        }
+
+        const label = document.createElement('span');
+        label.className = 'node-label';
+        label.textContent = node.label;
+        row.appendChild(label);
+
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        for (const [rel, text] of [['teaches', '+T'], ['assesses', '+A'], ['competencyRequired', '+R']]) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.textContent = text;
+          btn.title = `Zu ${rel} hinzufügen`;
+          btn.addEventListener('click', () => togglePick(node, rel, btn));
+          if (state.picked[rel].has(node.id)) btn.classList.add('on');
+          actions.appendChild(btn);
+        }
+        row.appendChild(actions);
+        li.appendChild(row);
+        return li;
+      }
+
+      // ── Selection + AMB preview ────────────────────────────────────────
+      function togglePick(node, rel, btn) {
+        const map = state.picked[rel];
+        if (map.has(node.id)) {
+          map.delete(node.id);
+          btn.classList.remove('on');
+        } else {
+          map.set(node.id, { id: node.id, type: 'Concept', prefLabel: { de: node.label } });
+          btn.classList.add('on');
+        }
+        renderChips(rel);
+        renderAmb();
+      }
+
+      function renderChips(rel) {
+        const host = document.getElementById(REL[rel]);
+        const concepts = [...state.picked[rel].values()];
+        if (concepts.length === 0) {
+          host.innerHTML = '<span class="empty-hint">noch nichts</span>';
+          return;
+        }
+        host.innerHTML = '';
+        for (const c of concepts) {
+          const chip = document.createElement('span');
+          chip.className = 'chip';
+          chip.append(c.prefLabel.de);
+          const x = document.createElement('button');
+          x.type = 'button';
+          x.textContent = '×';
+          x.setAttribute('aria-label', `Entfernen: ${c.prefLabel.de}`);
+          x.addEventListener('click', () => {
+            state.picked[rel].delete(c.id);
+            // Toggle the matching button in the tree off, if visible.
+            document.querySelectorAll('.actions button.on').forEach((b) => {
+              if (b.parentElement.parentElement.querySelector('.node-label')?.textContent === c.prefLabel.de) {
+                b.classList.remove('on');
+              }
+            });
+            renderChips(rel);
+            renderAmb();
+          });
+          chip.appendChild(x);
+          host.appendChild(chip);
+        }
+      }
+
+      function renderAmb() {
+        // Same shape edufeed-app emits into the AMB JSON-LD record.
+        const amb = {};
+        for (const rel of Object.keys(REL)) {
+          const concepts = [...state.picked[rel].values()];
+          if (concepts.length > 0) amb[rel] = concepts;
+        }
+        document.getElementById('amb-output').textContent = JSON.stringify(amb, null, 2);
+      }
+
+      // ── Boot ───────────────────────────────────────────────────────────
+      loadBundeslaender();
+    </script>
+  </body>
+</html>

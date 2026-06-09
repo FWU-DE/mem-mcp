@@ -41,20 +41,39 @@ The `+T`/`+A`/`+R` buttons push the node into `teaches`/`assesses`/`competencyRe
 └─────────────────────────────────┘    └─────────────────────────────┘    └────────────────────────┘
 ```
 
-Two decisions worth understanding before you copy this:
+### Do I need that server proxy at all?
 
-1. **The server proxies SPARQL — it doesn't expose it.** The browser POSTs
-   `{tool: 'list_schulfaecher', args: {bundeslandUri: '…'}}`, not raw SPARQL.
-   The server has a fixed whitelist of tool names and builds queries from
-   templates. URI arguments are validated as `http(s)://` URLs free of
-   `<` `>` `"` `\` and whitespace, so they cannot break out of the `<URI>`
-   slots in the templates. Don't skip this — interpolating user input into
-   SPARQL is the same injection problem as interpolating it into SQL.
-2. **Why not call `mem-ontologie-mcp` from the browser?** The MCP server speaks
-   stdio/Streamable-HTTP for LLM clients, not browsers. For a normal web form
-   you want a thin SvelteKit/Express/Next route that talks SPARQL directly.
-   Use the MCP server during development (Claude Code, MCP Inspector) to
-   prototype the queries; ship the queries embedded in your app.
+For the MEM endpoint specifically: **yes, but mostly for CORS.** The public
+Virtuoso at `sparql.mem.edufeed.org` doesn't set
+`Access-Control-Allow-Origin`, so a browser on any other origin can't read
+its responses. Most SPARQL stores ship with CORS closed by default — so
+in practice you almost always end up with a proxy.
+
+**You can skip the proxy when** any of these is true:
+
+- The endpoint sends `Access-Control-Allow-Origin: *` (or your origin).
+- You serve the frontend from the same origin as the endpoint.
+- Your dev server proxies for you — Vite `server.proxy`, Next.js API
+  routes, Webpack dev-server proxy all do this.
+
+**The proxy is also doing security work, but how much it matters depends
+on the endpoint.** edufeed-app validates URIs and whitelists tool names
+because that's defense-in-depth for an internal app pattern that may one
+day talk to an authenticated endpoint. Against a public read-only
+SPARQL store like MEM, a malicious browser could already hit the endpoint
+directly with arbitrary queries — the proxy adds no security boundary
+that wasn't already wide open. Validate URIs anyway if you build the
+proxy; it costs little and protects you if the endpoint changes.
+
+**Why not call `mem-ontologie-mcp` from the browser?** The MCP server
+speaks stdio / Streamable-HTTP for LLM clients, not browsers. Use it
+during development (Claude Code, MCP Inspector) to prototype the queries;
+ship the queries embedded in your app's proxy.
+
+> **Working demo:** see [`examples/curriculum-picker-demo/`](../examples/curriculum-picker-demo/)
+> for a ~120-line Node proxy + ~330-line vanilla-JS frontend that
+> implements every pattern below end-to-end. Run with `node proxy.mjs`,
+> open `http://localhost:5174`.
 
 ## The five query templates
 
