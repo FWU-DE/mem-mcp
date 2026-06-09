@@ -386,16 +386,17 @@ LIMIT 50`;
     }
   );
 
-  // Tool 6: Get curriculum tree (hat Teil) — bounded by depth
+  // Tool 6: Get curriculum tree (has part) — bounded by depth
   server.registerTool(
     "get_lehrplan_tree",
     {
       title: "Get Lehrplan Tree",
       description:
-        "Get the hierarchical structure (parent-child via 'hat Teil') of a specific Lehrplan. " +
+        "Get the hierarchical structure (parent-child via obo:BFO_0000051 'has part') of a specific Lehrplan. " +
         "Use a Lehrplan URI obtained from find_lehrplaene. " +
         "The depth parameter controls how many levels deep the tree goes (default 2). " +
-        "Use get_children to drill deeper into specific nodes.",
+        "Use get_children to drill deeper into specific nodes. " +
+        "For the flat list of all competency-level labels (the typical 'welche Kompetenzen werden entwickelt?' question) prefer get_kompetenzen.",
       inputSchema: {
         lehrplanUri: z.string().describe("URI of the Lehrplan (from find_lehrplaene results)"),
         depth: z
@@ -417,23 +418,24 @@ LIMIT 50`;
         for (let d = 1; d <= depth; d++) {
           if (d === 1) {
             unions.push(
-              `{ BIND(<${lehrplanUri}> AS ?parent) . ?parent lp:LP_0000008 ?child . }`
+              `{ BIND(<${lehrplanUri}> AS ?parent) . ?parent obo:BFO_0000051 ?child . }`
             );
           } else {
             // Chain d-1 intermediate hops from root to ?parent, then ?parent -> ?child
             const steps: string[] = [];
-            steps.push(`<${lehrplanUri}> lp:LP_0000008 ?step1 .`);
+            steps.push(`<${lehrplanUri}> obo:BFO_0000051 ?step1 .`);
             for (let i = 2; i < d; i++) {
-              steps.push(`?step${i - 1} lp:LP_0000008 ?step${i} .`);
+              steps.push(`?step${i - 1} obo:BFO_0000051 ?step${i} .`);
             }
             steps.push(`BIND(?step${d - 1} AS ?parent)`);
-            steps.push(`?parent lp:LP_0000008 ?child .`);
+            steps.push(`?parent obo:BFO_0000051 ?child .`);
             unions.push(`{ ${steps.join(" ")} }`);
           }
         }
 
         const query = `
 PREFIX lp: <https://w3id.org/lehrplan/ontology/>
+PREFIX obo: <http://purl.obolibrary.org/obo/>
 SELECT DISTINCT ?parent ?parentLabel ?child ?childLabel
 ${fromClauses(ALL_GRAPHS)}
 WHERE {
@@ -473,7 +475,7 @@ ORDER BY ?parent ?child`;
     {
       title: "Get Children",
       description:
-        "Get the direct children of a specific node in the Lehrplan hierarchy (via 'hat Teil'). " +
+        "Get the direct children of a specific node in the Lehrplan hierarchy (via obo:BFO_0000051 'has part'). " +
         "Use this to drill down into a specific branch after using get_lehrplan_tree.",
       inputSchema: {
         nodeUri: z
@@ -485,10 +487,11 @@ ORDER BY ?parent ?child`;
       try {
         const query = `
 PREFIX lp: <https://w3id.org/lehrplan/ontology/>
+PREFIX obo: <http://purl.obolibrary.org/obo/>
 SELECT DISTINCT ?child ?childLabel
 ${fromClauses(ALL_GRAPHS)}
 WHERE {
-  <${nodeUri}> lp:LP_0000008 ?child .
+  <${nodeUri}> obo:BFO_0000051 ?child .
   OPTIONAL { ?child rdfs:label ?childLabel . }
 }
 ORDER BY ?child`;
@@ -512,10 +515,10 @@ ORDER BY ?child`;
     {
       title: "Search Lehrpläne",
       description:
-        "Full-text search across all Lehrplan nodes by keyword. " +
-        "Uses prefix matching (e.g. 'Fisch' also finds 'Fische'). " +
-        "Returns matching nodes with their parent Lehrplan for context. " +
-        "Optionally filter by Bundesland and/or Schulfach.",
+        "Full-text search over Lehrplan node labels by keyword (Virtuoso bif:contains, prefix-matching — 'Fisch' also matches 'Fische'). " +
+        "Returns matching nodes with their parent Lehrplan for context. Optionally filter by Bundesland and/or Schulfach. " +
+        "NOTE: this matches LABEL TEXT, not concept type. Terms like 'Kompetenz' or 'Lernbereich' return no results because labels carry the competency wording itself (e.g. 'beschreiben…', 'erläutern…'), not the category name. " +
+        "To list all competencies of a Lehrplan, use get_kompetenzen instead.",
       inputSchema: {
         query: z.string().describe("Search term (e.g. 'Fisch', 'Evolution')"),
         bundesland: z
@@ -552,12 +555,13 @@ ORDER BY ?child`;
           const sfUri = await resolveSchulfachUri(schulfach, blUri, graphs);
           sparql = `
 PREFIX lp: <https://w3id.org/lehrplan/ontology/>
+PREFIX obo: <http://purl.obolibrary.org/obo/>
 SELECT DISTINCT ?s ?label ?lp ?lpLabel
 ${fromClauses(graphs)}
 WHERE {
   ?s rdfs:label ?label .
   ?label bif:contains "${containsExpr}" .
-  ?lp lp:LP_0000008+ ?s .
+  ?lp obo:BFO_0000051+ ?s .
   ?lp lp:LP_0000537 <${sfUri}> .
   ?lp rdfs:label ?lpLabel .
 }
@@ -566,13 +570,14 @@ LIMIT 50`;
         } else {
           sparql = `
 PREFIX lp: <https://w3id.org/lehrplan/ontology/>
+PREFIX obo: <http://purl.obolibrary.org/obo/>
 SELECT DISTINCT ?s ?label ?parent ?parentLabel
 ${fromClauses(graphs)}
 WHERE {
   ?s rdfs:label ?label .
   ?label bif:contains "${containsExpr}" .
   OPTIONAL {
-    ?parent lp:LP_0000008 ?s .
+    ?parent obo:BFO_0000051 ?s .
     ?parent rdfs:label ?parentLabel .
   }
 }
@@ -591,6 +596,106 @@ LIMIT 50`;
         let text = formatResults(results);
         if (results.results.bindings.length === 50) {
           text += "\n\n(Results limited to 50. Try a more specific query or add filters.)";
+        }
+        return { content: [{ type: "text", text }] };
+      } catch (e) {
+        return toolError(e instanceof Error ? e.message : String(e));
+      }
+    }
+  );
+
+  // Tool 9: Flat catalogue of all Kompetenzen/Inhalte under matching Lehrpläne
+  server.registerTool(
+    "get_kompetenzen",
+    {
+      title: "Get Kompetenzen",
+      description:
+        "List all educational content of matching Lehrpläne as a flat catalogue: every descendant node (Kompetenzerwartung, Lernbereich, Inhalt zu den Kompetenzen, …) reachable via obo:BFO_0000051+ together with its class label (e.g. 'Kompetenzerwartung (BY)') and its parent Lehrplan label. " +
+        "This is the right tool for 'Welche Kompetenzen werden in <Bundesland> im Fach <X> in der <Schulart> der Jahrgangsstufe <N> entwickelt?'-style questions. " +
+        "Takes the same filters as find_lehrplaene (bundesland required; schulfach, schulart, jahrgangsstufe optional). " +
+        "If multiple Lehrpläne match the filter set, results are merged — narrow the filters if the response is truncated.",
+      inputSchema: {
+        bundesland: z
+          .string()
+          .describe("State code (BY, SN, RP, ...) or name (Bayern, Sachsen, ...)"),
+        schulfach: z
+          .string()
+          .optional()
+          .describe("Optional: subject name in German (e.g. Biologie, Mathematik)"),
+        schulart: z
+          .string()
+          .optional()
+          .describe("Optional: school type name (e.g. Gymnasium, Grundschule)"),
+        jahrgangsstufe: z
+          .number()
+          .int()
+          .min(1)
+          .max(13)
+          .optional()
+          .describe("Optional: grade level (1-13)"),
+      },
+    },
+    async ({ bundesland, schulfach, schulart, jahrgangsstufe }) => {
+      try {
+        const bl = resolveBundesland(bundesland);
+        const graphs = graphsForBundesland(bl.code);
+
+        const filters = [`?lp lp:LP_0000029 <${bl.uri}> .`];
+        if (schulfach) {
+          const sfUri = await resolveSchulfachUri(schulfach, bl.uri, graphs);
+          filters.push(`?lp lp:LP_0000537 <${sfUri}> .`);
+        }
+        if (schulart) {
+          const saUri = await resolveSchulartUri(schulart, bl.uri, graphs);
+          filters.push(`?lp lp:LP_0000812 <${saUri}> .`);
+        }
+        if (jahrgangsstufe) {
+          const jsUri = `https://w3id.org/lehrplan/ontology/LP_${String(2000000 + jahrgangsstufe).padStart(7, "0")}`;
+          filters.push(`?lp lp:LP_0000026 <${jsUri}> .`);
+        }
+
+        const LIMIT = 500;
+        // NOTE: the type-label join is required rather than OPTIONAL because Virtuoso
+        // mis-evaluates OPTIONAL { ?node rdf:type ?t . ?t rdfs:label ?l } against the
+        // configured FROM set (returns ~2 rows instead of all). In practice every node
+        // under a Lehrplan has a labelled LP_-prefixed type, so the required join is safe.
+        const query = `
+PREFIX lp: <https://w3id.org/lehrplan/ontology/>
+PREFIX obo: <http://purl.obolibrary.org/obo/>
+SELECT DISTINCT ?lpLabel ?typeLabel ?nodeLabel ?node
+${fromClauses(graphs)}
+WHERE {
+  ?lpsubclass rdfs:subClassOf* lp:LP_0000438 .
+  ?lp rdf:type ?lpsubclass .
+  ?lp rdfs:label ?lpLabel .
+  ${filters.join("\n  ")}
+  ?lp obo:BFO_0000051+ ?node .
+  ?node rdfs:label ?nodeLabel .
+  ?node rdf:type ?type .
+  ?type rdfs:label ?typeLabel .
+  FILTER(STRSTARTS(STR(?type), "https://w3id.org/lehrplan/ontology/"))
+  FILTER(lang(?nodeLabel) = "" || lang(?nodeLabel) = "de")
+  FILTER(lang(?lpLabel) = "" || lang(?lpLabel) = "de")
+  FILTER(lang(?typeLabel) = "" || lang(?typeLabel) = "de")
+}
+ORDER BY ?lpLabel ?typeLabel ?node
+LIMIT ${LIMIT}`;
+
+        const results = await querySparql(query);
+        if (results.results.bindings.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text:
+                  "No Kompetenzen found. Verify the filter set with find_lehrplaene first — if find_lehrplaene returns a Lehrplan but get_kompetenzen is empty, the curriculum likely has no structured child nodes in the triple store yet.",
+              },
+            ],
+          };
+        }
+        let text = formatResults(results);
+        if (results.results.bindings.length === LIMIT) {
+          text += `\n\n(Results limited to ${LIMIT}. Narrow the filters — e.g. add a Jahrgangsstufe — to see the rest.)`;
         }
         return { content: [{ type: "text", text }] };
       } catch (e) {

@@ -26,18 +26,33 @@ Configured via environment variables (see Configuration section). Infrastructure
 - `GRAPH_STATE_BY` — Bayern
 - `GRAPH_STATE_RP` — Rheinland-Pfalz
 
-### Ontology Prefix
+### Ontology Prefixes
 
-`PREFIX lp: <https://w3id.org/lehrplan/ontology/>`
+```
+PREFIX lp:  <https://w3id.org/lehrplan/ontology/>
+PREFIX obo: <http://purl.obolibrary.org/obo/>
+```
 
-### Key Properties (LP codes)
+### Key Properties
 
-- `lp:LP_0000008` — hat Teil (part-of)
+- `obo:BFO_0000051` — **has part** — the property the state data graphs (`by/data`, `sn/data`, `rp/data`, `bb/data`) actually use for parent → child relationships. Use this for tree traversal.
+- `obo:BFO_0000050` — part of (inverse of `BFO_0000051`)
+- `lp:LP_0000008` — hat Teil; declared as `rdfs:subPropertyOf obo:BFO_0000051`. **State data graphs contain ZERO `lp:LP_0000008` triples** — Virtuoso does no automatic RDFS reasoning, so queries traversing the hierarchy MUST use `obo:BFO_0000051` (or include the `*/inferences` graphs, which are not configured by default).
 - `lp:LP_0000026` — hat Jahrgangsstufe (grade level)
 - `lp:LP_0000029` — von Bundesland (state)
 - `lp:LP_0000537` — hat Schulfach (subject)
 - `lp:LP_0000812` — für Schulart (school type)
 - `lp:LP_0030051` — hat Beschreibung (description)
+
+### Key Per-State Content Classes
+
+State-specific class names carry a `(BY)`, `(SN)`, … suffix. Examples for Bayern:
+
+- `lp:LP_0002046` — Lernbereich (BY)
+- `lp:LP_0002049` — Kompetenzerwartung (BY) — the actual "Kompetenz" the user is usually asking about
+- `lp:LP_0002050` — Inhalt zu den Kompetenzen (BY)
+
+Equivalent classes exist for other states. The `get_kompetenzen` tool returns these class labels alongside each node so the LLM does not need to memorise the LP_* codes.
 
 ### Key Classes
 
@@ -76,11 +91,14 @@ Pattern: `lp:LP_200000N` where N = grade level (1-13)
 
 ### Reasoning Pattern
 
-The triple store doesn't support automatic reasoning. Use SPARQL property paths:
-```sparql
-?lpsubclass rdfs:subClassOf* lp:LP_0000438 .
-?s rdf:type ?lpsubclass .
-```
+The triple store doesn't support automatic reasoning. Two consequences:
+
+1. **Class hierarchy** — use explicit `rdfs:subClassOf*` property paths:
+   ```sparql
+   ?lpsubclass rdfs:subClassOf* lp:LP_0000438 .
+   ?s rdf:type ?lpsubclass .
+   ```
+2. **Property hierarchy** — the materialised triple always uses the most specific OR the most general property, never both. For part-of, the data uses `obo:BFO_0000051` only — querying the sub-property `lp:LP_0000008` returns nothing. Either query the super-property directly, or add the per-state `*/inferences` graph (which materialises the inferred triples).
 
 ## MCP Tools
 
@@ -89,9 +107,10 @@ The triple store doesn't support automatic reasoning. Use SPARQL property paths:
 - **`list_schulfaecher`** — List school subjects for a state
 - **`list_schularten`** — List school types for a state
 - **`find_lehrplaene`** — Find curricula by state, subject, school type, grade
-- **`get_lehrplan_tree`** — Get hierarchical structure of a Lehrplan. `depth` parameter (default 2, max 10) controls how many levels deep the tree goes. Use `get_children` to drill deeper into specific nodes.
-- **`get_children`** — Get the direct children of a specific node in the Lehrplan hierarchy (via 'hat Teil'). Use this to drill down into a specific branch after using `get_lehrplan_tree`.
-- **`search`** — Full-text search across all Lehrplan nodes by keyword (uses Virtuoso `bif:contains`). Returns matching nodes with their parent Lehrplan for context. Optional `bundesland` filter.
+- **`get_lehrplan_tree`** — Get hierarchical structure of a Lehrplan (parent → child via `obo:BFO_0000051`). `depth` parameter (default 2, max 10) controls how many levels deep the tree goes. Use `get_children` to drill deeper into specific nodes.
+- **`get_children`** — Get the direct children of a specific node in the Lehrplan hierarchy (via `obo:BFO_0000051`). Use this to drill down into a specific branch after using `get_lehrplan_tree`.
+- **`get_kompetenzen`** — Flat catalogue of all descendant nodes (Kompetenzerwartungen, Lernbereiche, Inhalte, …) reachable from matching Lehrpläne via `obo:BFO_0000051+`, annotated with their class label. Takes the same filters as `find_lehrplaene`. This is the right tool for "Welche Kompetenzen werden in <Bundesland> im Fach <X> in <Schulart> der Jahrgangsstufe <N> entwickelt?"-style questions.
+- **`search`** — Full-text search over Lehrplan node label text (Virtuoso `bif:contains`). Matches LABEL TEXT only, not concept type — terms like "Kompetenz" return nothing. Optional `bundesland` and `schulfach` filters.
 
 ## Ontology Documentation
 
